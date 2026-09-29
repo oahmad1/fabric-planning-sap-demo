@@ -28,4 +28,3 @@ Get-ChildItem -Path (Join-Path $repoRoot "scripts") -Filter *.ps1 | ForEach-Obje
 }
 
 Write-Host "Repository validation passed."
-

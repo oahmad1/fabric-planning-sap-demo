@@ -45,18 +45,35 @@ cd .\fabric-planning-sap-demo
   -TenantId "<tenant-id>" `
   -WorkspaceName "Fabric SAP Planning Demo" `
   -CapacityId "<fabric-capacity-id>" `
-  -CreateOntology
+  -CreateOntology `
+  -CompleteSetup `
+  -WaitForNotebook `
+  -CreateSqlDatabase `
+  -AttemptPreviewAutomation
 ```
+
+The command creates the API-supported Fabric items, starts the notebook that seeds the lakehouse, attempts Fabric SQL database creation for Planning writeback, and attempts preview item creation for Planning/Data Agent where the tenant accepts those item types.
+
+If your tenant rejects Planning/Data Agent/SQL database creation through public APIs, continue with the generated instructions in `outputs\post-deployment-summary.json`.
 
 After deployment:
 
 1. Open the generated `outputs\deployment-summary.json`.
-2. Open the notebook in Fabric and run it to seed dummy SAP-style data into the lakehouse.
-3. Create a semantic model over the curated gold tables or use the default lakehouse semantic model where appropriate.
-4. Create a Fabric SQL database for Planning writeback.
-5. Create a Fabric Planning item using the semantic model and writeback database.
-6. Create a Fabric Data Agent using `agents\data-agent-instructions.md`.
-7. Use `docs\demo-script.md` to run the sales demo.
+2. Open `outputs\post-deployment-summary.json`.
+3. Confirm the notebook job completed and the semantic model was discovered.
+4. If Planning/Data Agent/SQL database creation was marked `ManualRequired`, follow `docs\fabric-planning-setup.md`.
+5. Use `docs\demo-script.md` to run the sales demo.
+
+You can also run post-deployment setup separately:
+
+```powershell
+.\scripts\Complete-DemoSetup.ps1 `
+  -DeploymentSummaryPath .\outputs\deployment-summary.json `
+  -RunNotebook `
+  -WaitForNotebook `
+  -CreateSqlDatabase `
+  -AttemptPreviewItems
+```
 
 ## Subject areas
 
@@ -95,4 +112,3 @@ When SAP access is available, replace the dummy CSV/notebook source step with Bu
 - Planning scenario.
 
 The downstream planning, Power BI, Data Agent, and ontology story can remain the same.
-

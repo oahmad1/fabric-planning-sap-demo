@@ -10,7 +10,11 @@ param(
     [string]$WarehouseName = "SAPPlanningWarehouse",
     [string]$NotebookName = "Load SAP Planning Demo",
     [string]$OntologyName = "SAP_Planning_Ontology",
-    [switch]$CreateOntology
+    [switch]$CreateOntology,
+    [switch]$CompleteSetup,
+    [switch]$WaitForNotebook,
+    [switch]$CreateSqlDatabase,
+    [switch]$AttemptPreviewAutomation
 )
 
 $ErrorActionPreference = "Stop"
@@ -258,3 +262,14 @@ Write-Host ""
 Write-Host "Deployment scaffold complete."
 Write-Host "Summary: $summaryPath"
 
+if ($CompleteSetup) {
+    $completeScript = Join-Path $PSScriptRoot "Complete-DemoSetup.ps1"
+    $completeArgs = @(
+        "-DeploymentSummaryPath", $summaryPath,
+        "-RunNotebook"
+    )
+    if ($WaitForNotebook) { $completeArgs += "-WaitForNotebook" }
+    if ($CreateSqlDatabase) { $completeArgs += "-CreateSqlDatabase" }
+    if ($AttemptPreviewAutomation) { $completeArgs += "-AttemptPreviewItems" }
+    & $completeScript @completeArgs
+}
