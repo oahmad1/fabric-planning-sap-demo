@@ -260,6 +260,12 @@ function New-TmdlTablePart {
     foreach ($column in $Columns) {
         $lines.Add("`tcolumn $($column.Name)")
         $lines.Add("`t`tdataType: $($column.Type)")
+        if ($column.IsHidden) {
+            $lines.Add("`t`tisHidden")
+        }
+        if ($column.IsKey) {
+            $lines.Add("`t`tisKey")
+        }
         if ($column.Type -eq "string") {
             $lines.Add("`t`tsummarizeBy: none")
         }
@@ -276,11 +282,18 @@ function New-TmdlTablePart {
 }
 
 function New-Column {
-    param([string]$Name, [string]$Type)
+    param(
+        [string]$Name,
+        [string]$Type,
+        [switch]$IsKey,
+        [switch]$IsHidden
+    )
     return [pscustomobject]@{
         Name = $Name
         Source = $Name
         Type = $Type
+        IsKey = [bool]$IsKey
+        IsHidden = [bool]$IsHidden
     }
 }
 
@@ -329,6 +342,17 @@ expression DL_Lakehouse =
 
     $tables = @(
         @{
+            Path = "definition/tables/gold_date.tmdl"
+            Content = New-TmdlTablePart -TableName "gold_date" -Columns @(
+                New-Column "date" "dateTime" -IsKey
+                New-Column "year" "int64"
+                New-Column "quarter" "int64"
+                New-Column "month_number" "int64"
+                New-Column "month_name" "string"
+                New-Column "year_month" "string"
+            )
+        }
+        @{
             Path = "definition/tables/gold_plan_vs_actual.tmdl"
             Content = New-TmdlTablePart -TableName "gold_plan_vs_actual" -Measures $planMeasures -Columns @(
                 New-Column "scenario_id" "string"
@@ -341,6 +365,8 @@ expression DL_Lakehouse =
                 New-Column "plant_name" "string"
                 New-Column "region" "string"
                 New-Column "planning_owner" "string"
+                New-Column "forecast_month" "string"
+                New-Column "forecast_month_start" "dateTime"
                 New-Column "available_qty" "int64"
                 New-Column "open_purchase_order_qty" "int64"
                 New-Column "open_sales_order_qty" "int64"
@@ -369,6 +395,8 @@ expression DL_Lakehouse =
                 New-Column "plant_name" "string"
                 New-Column "region" "string"
                 New-Column "planning_owner" "string"
+                New-Column "forecast_month" "string"
+                New-Column "forecast_month_start" "dateTime"
                 New-Column "on_hand_qty" "int64"
                 New-Column "allocated_qty" "int64"
                 New-Column "quality_hold_qty" "int64"
@@ -415,10 +443,21 @@ expression DL_Lakehouse =
         }
     )
 
+    $relationshipsTmdl = @"
+relationship 'Plan vs Actual to Date'
+	fromColumn: gold_plan_vs_actual.forecast_month_start
+	toColumn: gold_date.date
+
+relationship 'Inventory Position to Date'
+	fromColumn: gold_inventory_position.forecast_month_start
+	toColumn: gold_date.date
+"@
+
     $parts = @(
         @{ path = "definition.pbism"; payload = ConvertTo-Base64String $definitionPbism; payloadType = "InlineBase64" },
         @{ path = "definition/database.tmdl"; payload = ConvertTo-Base64String $databaseTmdl; payloadType = "InlineBase64" },
-        @{ path = "definition/model.tmdl"; payload = ConvertTo-Base64String $modelTmdl; payloadType = "InlineBase64" }
+        @{ path = "definition/model.tmdl"; payload = ConvertTo-Base64String $modelTmdl; payloadType = "InlineBase64" },
+        @{ path = "definition/relationships.tmdl"; payload = ConvertTo-Base64String $relationshipsTmdl; payloadType = "InlineBase64" }
     )
 
     foreach ($table in $tables) {
@@ -438,6 +477,12 @@ function Try-CreateSemanticModel {
         Where-Object { $_.displayName -eq $modelName } |
         Select-Object -First 1
     if ($existing) {
+        Write-Host "Updating semantic model '$modelName' with planning date metadata..."
+        $updateUrl = "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/semanticModels/$($existing.id)/updateDefinition"
+        $updateResult = Invoke-FabricApi -Method POST -Url $updateUrl -Body @{ definition = New-SemanticModelDefinition } -AllowFailure
+        if ($updateResult.StatusCode -notin @(200, 202)) {
+            Write-Warning "Semantic model update was not accepted: $($updateResult.RawContent)"
+        }
         return $existing
     }
 
