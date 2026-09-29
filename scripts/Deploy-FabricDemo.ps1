@@ -22,6 +22,11 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $outputsDir = Join-Path $repoRoot "outputs"
 New-Item -ItemType Directory -Force -Path $outputsDir | Out-Null
 
+if (-not [string]::IsNullOrWhiteSpace($CapacityId) -and $CapacityId -match "/capacities/([^/]+)$") {
+    $CapacityId = $Matches[1]
+    Write-Host "Extracted Fabric capacity ID from Azure resource ID: $CapacityId"
+}
+
 function Test-CommandExists {
     param([string]$Name)
     if (-not (Get-Command $Name -ErrorAction SilentlyContinue)) {

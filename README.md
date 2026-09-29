@@ -38,6 +38,26 @@ Fabric Planning item creation, Planning sheet layout, Data Agent creation, and M
 
 ## Quick start
 
+### Azure Cloud Shell
+
+```powershell
+cd ~
+git clone https://github.com/oahmad1/fabric-planning-sap-demo.git
+cd ./fabric-planning-sap-demo
+
+./scripts/Deploy-FabricDemo.ps1 `
+  -TenantId "<tenant-id>" `
+  -WorkspaceName "Fabric SAP Planning Demo" `
+  -CapacityId "<fabric-capacity-guid-or-resource-id>" `
+  -CreateOntology `
+  -CompleteSetup `
+  -WaitForNotebook `
+  -CreateSqlDatabase `
+  -AttemptPreviewAutomation
+```
+
+### Local PowerShell
+
 ```powershell
 cd .\fabric-planning-sap-demo
 
