@@ -1,0 +1,4 @@
+scenario_id,scenario_name,scenario_type,description
+BASELINE,Current baseline plan,Baseline,Plan based on current forecast and standard lead times.
+REV1,Planner revised replenishment,Revised,Planner increases safety stock for high-risk SKUs and adjusts supplier lead-time assumptions.
+

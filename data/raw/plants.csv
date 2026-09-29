@@ -1,0 +1,5 @@
+plant_id,plant_name,region,planning_owner
+PL-10,Seattle Distribution Center,West,Alex Planner
+PL-20,Chicago Manufacturing Hub,Central,Casey Planner
+PL-30,Atlanta Fulfillment Center,East,Jordan Planner
+

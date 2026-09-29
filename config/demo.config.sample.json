@@ -1,0 +1,11 @@
+{
+  "tenantId": "<tenant-id>",
+  "workspaceName": "Fabric SAP Planning Demo",
+  "capacityId": "<optional-fabric-capacity-id>",
+  "lakehouseName": "SAPPlanningLakehouse",
+  "warehouseName": "SAPPlanningWarehouse",
+  "notebookName": "Load SAP Planning Demo",
+  "ontologyName": "SAP_Planning_Ontology",
+  "createOntology": true
+}
+

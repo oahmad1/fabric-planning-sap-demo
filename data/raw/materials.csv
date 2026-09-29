@@ -1,0 +1,8 @@
+material_id,material_name,product_family,unit_cost,unit_price,abc_class,shelf_life_days
+MAT-100,Contoso Smart Sensor,Electronics,42,89,A,365
+MAT-200,Fabrikam Control Valve,Industrial,76,141,A,540
+MAT-300,Northwind Pump Kit,Industrial,118,225,B,720
+MAT-400,AdventureWorks Battery Pack,Electronics,35,79,A,270
+MAT-500,Graphic Design Packaging,Packaging,4,9,C,180
+MAT-600,Tailspin Safety Harness,Safety,28,62,B,1095
+
