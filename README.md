@@ -74,6 +74,8 @@ cd .\fabric-planning-sap-demo
 
 The command creates the API-supported Fabric items, starts the notebook that seeds the lakehouse, attempts Fabric SQL database creation for Planning writeback, and attempts preview item creation for Planning/Data Agent where the tenant accepts those item types.
 
+`-CapacityId` accepts either the Fabric capacity GUID or the full Azure resource ID for a `Microsoft.Fabric/capacities` resource. If you pass the full Azure resource ID, the script resolves it to the Fabric capacity GUID by listing capacities you can access.
+
 If your tenant rejects Planning/Data Agent/SQL database creation through public APIs, continue with the generated instructions in `outputs\post-deployment-summary.json`.
 
 After deployment:

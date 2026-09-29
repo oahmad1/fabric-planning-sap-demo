@@ -22,9 +22,13 @@ $repoRoot = Split-Path -Parent $PSScriptRoot
 $outputsDir = Join-Path $repoRoot "outputs"
 New-Item -ItemType Directory -Force -Path $outputsDir | Out-Null
 
+$CapacityNameHint = $null
 if (-not [string]::IsNullOrWhiteSpace($CapacityId) -and $CapacityId -match "/capacities/([^/]+)$") {
-    $CapacityId = $Matches[1]
-    Write-Host "Extracted Fabric capacity ID from Azure resource ID: $CapacityId"
+    $CapacityNameHint = $Matches[1]
+    Write-Host "Extracted Fabric capacity resource name from Azure resource ID: $CapacityNameHint"
+}
+elseif (-not [string]::IsNullOrWhiteSpace($CapacityId) -and $CapacityId -notmatch "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$") {
+    $CapacityNameHint = $CapacityId
 }
 
 function Test-CommandExists {
@@ -91,6 +95,37 @@ function Invoke-FabricRest {
         if ($tempFile -and (Test-Path $tempFile)) {
             Remove-Item $tempFile -Force
         }
+    }
+
+    function Resolve-FabricCapacityId {
+        param(
+            [string]$Value,
+            [string]$NameHint
+        )
+
+        if ([string]::IsNullOrWhiteSpace($Value)) {
+            return $null
+        }
+
+        if ($Value -match "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$") {
+            return $Value
+        }
+
+        $lookupName = if ([string]::IsNullOrWhiteSpace($NameHint)) { $Value } else { $NameHint }
+        Write-Host "Resolving Fabric capacity GUID for '$lookupName'..."
+        $response = Invoke-FabricRest -Method get -Url "https://api.fabric.microsoft.com/v1/capacities"
+        $capacities = @($response.value)
+        $match = $capacities |
+            Where-Object { $_.displayName -ieq $lookupName -or $_.id -ieq $lookupName } |
+            Select-Object -First 1
+
+        if (-not $match) {
+            $available = ($capacities | ForEach-Object { "$($_.displayName) [$($_.id)] - $($_.state)" }) -join "; "
+            throw "Could not resolve Fabric capacity '$lookupName' to a GUID. Available capacities for this user: $available"
+        }
+
+        Write-Host "Resolved Fabric capacity GUID: $($match.id) ($($match.displayName), $($match.state))"
+        return $match.id
     }
 }
 
@@ -224,6 +259,8 @@ $account = az account show --query tenantId -o tsv 2>$null
 if ($LASTEXITCODE -ne 0 -or $account -ne $TenantId) {
     az login --tenant $TenantId --allow-no-subscriptions | Out-Null
 }
+
+$CapacityId = Resolve-FabricCapacityId -Value $CapacityId -NameHint $CapacityNameHint
 
 $workspace = New-OrGetWorkspace
 $workspaceId = $workspace.id
