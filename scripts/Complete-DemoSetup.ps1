@@ -134,6 +134,68 @@ function Wait-FabricJob {
     throw "Timed out waiting for notebook job after $TimeoutMinutes minutes."
 }
 
+function Get-FabricItemByName {
+    param(
+        [string]$Type,
+        [string]$Name,
+        [int]$TimeoutSeconds = 180
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Name)) {
+        return $null
+    }
+
+    $workspaceId = $summary.workspaceId
+    $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
+    do {
+        $url = "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/items?type=$Type"
+        $result = Invoke-FabricApi -Method GET -Url $url
+        $item = @($result.Content.value) |
+            Where-Object { $_.displayName -eq $Name } |
+            Select-Object -First 1
+        if ($item) {
+            return $item
+        }
+        Start-Sleep -Seconds 10
+    } while ((Get-Date) -lt $deadline)
+
+    return $null
+}
+
+function Repair-DeploymentSummary {
+    $changed = $false
+
+    $lookups = @(
+        @{ Type = "Lakehouse"; NameProperty = "lakehouseName"; IdProperty = "lakehouseId" },
+        @{ Type = "Warehouse"; NameProperty = "warehouseName"; IdProperty = "warehouseId" },
+        @{ Type = "Notebook"; NameProperty = "notebookName"; IdProperty = "notebookId" },
+        @{ Type = "Ontology"; NameProperty = "ontologyName"; IdProperty = "ontologyId" }
+    )
+
+    foreach ($lookup in $lookups) {
+        $name = $summary.($lookup.NameProperty)
+        $id = $summary.($lookup.IdProperty)
+        if ([string]::IsNullOrWhiteSpace($name) -or -not [string]::IsNullOrWhiteSpace($id)) {
+            continue
+        }
+
+        Write-Host "Resolving missing $($lookup.Type) ID for '$name'..."
+        $item = Get-FabricItemByName -Type $lookup.Type -Name $name
+        if (-not $item) {
+            throw "Could not find $($lookup.Type) '$name' in workspace $($summary.workspaceId). Wait a minute and rerun this script."
+        }
+
+        $summary.($lookup.IdProperty) = $item.id
+        $changed = $true
+        Write-Host "Resolved $($lookup.Type): $($item.id)"
+    }
+
+    if ($changed) {
+        $summary | ConvertTo-Json -Depth 20 | Set-Content -Path $summaryFullPath -Encoding UTF8
+        Write-Host "Updated deployment summary with resolved item IDs."
+    }
+}
+
 function Start-SeedNotebook {
     $workspaceId = $summary.workspaceId
     $notebookId = $summary.notebookId
@@ -255,6 +317,7 @@ if (-not (Test-CommandExists -Name "az")) {
 }
 
 Write-Host "Using deployment summary: $summaryFullPath"
+Repair-DeploymentSummary
 $postSetup = [ordered]@{
     workspaceId = $summary.workspaceId
     lakehouseId = $summary.lakehouseId
@@ -308,4 +371,3 @@ $postSetup | ConvertTo-Json -Depth 20 | Set-Content -Path $postSetupPath -Encodi
 Write-Host ""
 Write-Host "Post-deployment setup complete."
 Write-Host "Summary: $postSetupPath"
-
