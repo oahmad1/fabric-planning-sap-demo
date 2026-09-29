@@ -36,7 +36,17 @@ function Test-CommandExists {
 
 function ConvertTo-TempJsonFile {
     param([object]$Body)
-    $file = Join-Path $env:TEMP ("fabric-demo-" + [guid]::NewGuid().ToString() + ".json")
+    $tempRoot = $env:TEMP
+    if ([string]::IsNullOrWhiteSpace($tempRoot)) {
+        $tempRoot = $env:TMPDIR
+    }
+    if ([string]::IsNullOrWhiteSpace($tempRoot)) {
+        $tempRoot = [System.IO.Path]::GetTempPath()
+    }
+    if ([string]::IsNullOrWhiteSpace($tempRoot)) {
+        $tempRoot = "/tmp"
+    }
+    $file = Join-Path $tempRoot ("fabric-demo-" + [guid]::NewGuid().ToString() + ".json")
     $Body | ConvertTo-Json -Depth 50 | Set-Content -Path $file -Encoding UTF8
     return $file
 }
