@@ -238,6 +238,239 @@ function Get-SemanticModels {
     return @($result.Content.value)
 }
 
+function ConvertTo-Base64String {
+    param([string]$Value)
+    return [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Value))
+}
+
+function New-TmdlTablePart {
+    param(
+        [string]$TableName,
+        [array]$Columns,
+        [string[]]$Measures = @()
+    )
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("table $TableName")
+    $lines.Add("")
+    foreach ($measure in $Measures) {
+        $lines.Add($measure)
+        $lines.Add("")
+    }
+    foreach ($column in $Columns) {
+        $lines.Add("`tcolumn $($column.Name)")
+        $lines.Add("`t`tdataType: $($column.Type)")
+        if ($column.Type -eq "string") {
+            $lines.Add("`t`tsummarizeBy: none")
+        }
+        $lines.Add("`t`tsourceColumn: $($column.Source)")
+        $lines.Add("")
+    }
+    $lines.Add("`tpartition $TableName = entity")
+    $lines.Add("`t`tmode: directLake")
+    $lines.Add("`t`tsource")
+    $lines.Add("`t`t`tentityName: $TableName")
+    $lines.Add("`t`t`tschemaName: gold")
+    $lines.Add("`t`t`texpressionSource: DL_Lakehouse")
+    return ($lines -join "`n")
+}
+
+function New-Column {
+    param([string]$Name, [string]$Type)
+    return [pscustomobject]@{
+        Name = $Name
+        Source = $Name
+        Type = $Type
+    }
+}
+
+function New-SemanticModelDefinition {
+    $workspaceId = $summary.workspaceId
+    $lakehouseId = $summary.lakehouseId
+    $oneLakeUrl = "https://onelake.dfs.fabric.microsoft.com/$workspaceId/$lakehouseId"
+
+    $definitionPbism = @"
+{
+  "`$schema": "https://developer.microsoft.com/json-schemas/fabric/item/semanticModel/definitionProperties/1.0.0/schema.json",
+  "version": "5.0",
+  "settings": {
+    "qnaEnabled": true
+  }
+}
+"@
+
+    $databaseTmdl = @"
+database
+	compatibilityLevel: 1702
+	compatibilityMode: powerBI
+"@
+
+    $modelTmdl = @"
+model Model
+	culture: en-US
+	defaultPowerBIDataSourceVersion: powerBI_V3
+	discourageImplicitMeasures
+
+expression DL_Lakehouse =
+	let
+		Source = AzureStorage.DataLake("$oneLakeUrl", [HierarchicalNavigation=true])
+	in
+		Source
+"@
+
+    $planMeasures = @(
+        "`tmeasure 'Available Qty' = SUM('gold_plan_vs_actual'[available_qty])`n`t`tformatString: #,##0",
+        "`tmeasure 'Planned Demand Qty' = SUM('gold_plan_vs_actual'[planned_demand_qty])`n`t`tformatString: #,##0",
+        "`tmeasure 'Reorder Qty' = SUM('gold_plan_vs_actual'[reorder_qty])`n`t`tformatString: #,##0",
+        "`tmeasure 'Working Capital Impact' = SUM('gold_plan_vs_actual'[working_capital_impact])`n`t`tformatString: `$#,##0",
+        "`tmeasure 'Projected Inventory After Plan' = SUM('gold_plan_vs_actual'[projected_inventory_after_plan])`n`t`tformatString: #,##0",
+        "`tmeasure 'High Risk Count' = COUNTROWS(FILTER('gold_plan_vs_actual', 'gold_plan_vs_actual'[stockout_risk_after_plan] = `"High`"))`n`t`tformatString: #,##0"
+    )
+
+    $tables = @(
+        @{
+            Path = "definition/tables/gold_plan_vs_actual.tmdl"
+            Content = New-TmdlTablePart -TableName "gold_plan_vs_actual" -Measures $planMeasures -Columns @(
+                New-Column "scenario_id" "string"
+                New-Column "scenario_name" "string"
+                New-Column "scenario_type" "string"
+                New-Column "material_id" "string"
+                New-Column "material_name" "string"
+                New-Column "product_family" "string"
+                New-Column "plant_id" "string"
+                New-Column "plant_name" "string"
+                New-Column "region" "string"
+                New-Column "planning_owner" "string"
+                New-Column "available_qty" "int64"
+                New-Column "open_purchase_order_qty" "int64"
+                New-Column "open_sales_order_qty" "int64"
+                New-Column "baseline_demand_qty" "int64"
+                New-Column "consensus_demand_qty" "int64"
+                New-Column "planned_demand_qty" "int64"
+                New-Column "safety_stock_days" "int64"
+                New-Column "lead_time_override_days" "int64"
+                New-Column "reorder_qty" "int64"
+                New-Column "projected_inventory_after_plan" "int64"
+                New-Column "stockout_risk_before_plan" "string"
+                New-Column "stockout_risk_after_plan" "string"
+                New-Column "working_capital_impact" "decimal"
+                New-Column "supplier_delay_risk" "string"
+            )
+        }
+        @{
+            Path = "definition/tables/gold_inventory_position.tmdl"
+            Content = New-TmdlTablePart -TableName "gold_inventory_position" -Columns @(
+                New-Column "snapshot_date" "string"
+                New-Column "material_id" "string"
+                New-Column "material_name" "string"
+                New-Column "product_family" "string"
+                New-Column "unit_cost" "decimal"
+                New-Column "plant_id" "string"
+                New-Column "plant_name" "string"
+                New-Column "region" "string"
+                New-Column "planning_owner" "string"
+                New-Column "on_hand_qty" "int64"
+                New-Column "allocated_qty" "int64"
+                New-Column "quality_hold_qty" "int64"
+                New-Column "available_qty" "int64"
+                New-Column "open_sales_order_qty" "int64"
+                New-Column "baseline_demand_qty" "int64"
+                New-Column "consensus_demand_qty" "int64"
+                New-Column "open_purchase_order_qty" "int64"
+                New-Column "supplier_delay_risk" "string"
+                New-Column "stockout_risk_before_plan" "string"
+            )
+        }
+        @{
+            Path = "definition/tables/gold_supplier_performance.tmdl"
+            Content = New-TmdlTablePart -TableName "gold_supplier_performance" -Columns @(
+                New-Column "supplier_id" "string"
+                New-Column "supplier_name" "string"
+                New-Column "country" "string"
+                New-Column "risk_tier" "string"
+                New-Column "standard_lead_time_days" "int64"
+                New-Column "avg_days_late" "decimal"
+                New-Column "supplier_delay_risk" "string"
+            )
+        }
+        @{
+            Path = "definition/tables/gold_replenishment_plan.tmdl"
+            Content = New-TmdlTablePart -TableName "gold_replenishment_plan" -Columns @(
+                New-Column "scenario_id" "string"
+                New-Column "scenario_name" "string"
+                New-Column "scenario_type" "string"
+                New-Column "material_id" "string"
+                New-Column "material_name" "string"
+                New-Column "product_family" "string"
+                New-Column "plant_id" "string"
+                New-Column "plant_name" "string"
+                New-Column "region" "string"
+                New-Column "planning_owner" "string"
+                New-Column "demand_uplift_pct" "decimal"
+                New-Column "safety_stock_days" "int64"
+                New-Column "lead_time_override_days" "int64"
+                New-Column "reorder_qty" "int64"
+                New-Column "working_capital_impact" "decimal"
+            )
+        }
+    )
+
+    $parts = @(
+        @{ path = "definition.pbism"; payload = ConvertTo-Base64String $definitionPbism; payloadType = "InlineBase64" },
+        @{ path = "definition/database.tmdl"; payload = ConvertTo-Base64String $databaseTmdl; payloadType = "InlineBase64" },
+        @{ path = "definition/model.tmdl"; payload = ConvertTo-Base64String $modelTmdl; payloadType = "InlineBase64" }
+    )
+
+    foreach ($table in $tables) {
+        $parts += @{ path = $table.Path; payload = ConvertTo-Base64String $table.Content; payloadType = "InlineBase64" }
+    }
+
+    return @{
+        format = "TMDL"
+        parts = $parts
+    }
+}
+
+function Try-CreateSemanticModel {
+    $workspaceId = $summary.workspaceId
+    $modelName = "SAP Planning Semantic Model"
+    $existing = Get-SemanticModels |
+        Where-Object { $_.displayName -eq $modelName } |
+        Select-Object -First 1
+    if ($existing) {
+        return $existing
+    }
+
+    Write-Host "Creating semantic model '$modelName' over gold lakehouse tables..."
+    $body = @{
+        displayName = $modelName
+        description = "Direct Lake semantic model over SAP-style inventory planning gold tables."
+        definition = New-SemanticModelDefinition
+    }
+    $url = "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/semanticModels"
+    $result = Invoke-FabricApi -Method POST -Url $url -Body $body -AllowFailure
+
+    if ($result.StatusCode -notin @(200, 201, 202)) {
+        Write-Warning "Semantic model creation was not accepted: $($result.RawContent)"
+        return $null
+    }
+
+    $deadline = (Get-Date).AddMinutes(5)
+    do {
+        Start-Sleep -Seconds 10
+        $created = Get-SemanticModels |
+            Where-Object { $_.displayName -eq $modelName } |
+            Select-Object -First 1
+        if ($created) {
+            Write-Host "Semantic model created: $($created.id)"
+            return $created
+        }
+    } while ((Get-Date) -lt $deadline)
+
+    Write-Warning "Semantic model creation was accepted but the model was not discoverable yet. Check the Fabric workspace in a minute."
+    return $null
+}
+
 function Try-CreateSqlDatabase {
     $workspaceId = $summary.workspaceId
     $dbName = "PlanningWriteback"
@@ -335,6 +568,12 @@ if ($RunNotebook) {
 }
 
 $semanticModels = Get-SemanticModels
+if (@($semanticModels).Count -eq 0) {
+    $createdModel = Try-CreateSemanticModel
+    if ($createdModel) {
+        $semanticModels = Get-SemanticModels
+    }
+}
 $postSetup.semanticModels = $semanticModels | Select-Object id, displayName, type
 $selectedModel = $semanticModels |
     Where-Object { $_.displayName -eq $summary.lakehouseName -or $_.displayName -like "*$($summary.lakehouseName)*" } |
