@@ -96,37 +96,37 @@ function Invoke-FabricRest {
             Remove-Item $tempFile -Force
         }
     }
+}
 
-    function Resolve-FabricCapacityId {
-        param(
-            [string]$Value,
-            [string]$NameHint
-        )
+function Resolve-FabricCapacityId {
+    param(
+        [string]$Value,
+        [string]$NameHint
+    )
 
-        if ([string]::IsNullOrWhiteSpace($Value)) {
-            return $null
-        }
-
-        if ($Value -match "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$") {
-            return $Value
-        }
-
-        $lookupName = if ([string]::IsNullOrWhiteSpace($NameHint)) { $Value } else { $NameHint }
-        Write-Host "Resolving Fabric capacity GUID for '$lookupName'..."
-        $response = Invoke-FabricRest -Method get -Url "https://api.fabric.microsoft.com/v1/capacities"
-        $capacities = @($response.value)
-        $match = $capacities |
-            Where-Object { $_.displayName -ieq $lookupName -or $_.id -ieq $lookupName } |
-            Select-Object -First 1
-
-        if (-not $match) {
-            $available = ($capacities | ForEach-Object { "$($_.displayName) [$($_.id)] - $($_.state)" }) -join "; "
-            throw "Could not resolve Fabric capacity '$lookupName' to a GUID. Available capacities for this user: $available"
-        }
-
-        Write-Host "Resolved Fabric capacity GUID: $($match.id) ($($match.displayName), $($match.state))"
-        return $match.id
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return $null
     }
+
+    if ($Value -match "^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$") {
+        return $Value
+    }
+
+    $lookupName = if ([string]::IsNullOrWhiteSpace($NameHint)) { $Value } else { $NameHint }
+    Write-Host "Resolving Fabric capacity GUID for '$lookupName'..."
+    $response = Invoke-FabricRest -Method get -Url "https://api.fabric.microsoft.com/v1/capacities"
+    $capacities = @($response.value)
+    $match = $capacities |
+        Where-Object { $_.displayName -ieq $lookupName -or $_.id -ieq $lookupName } |
+        Select-Object -First 1
+
+    if (-not $match) {
+        $available = ($capacities | ForEach-Object { "$($_.displayName) [$($_.id)] - $($_.state)" }) -join "; "
+        throw "Could not resolve Fabric capacity '$lookupName' to a GUID. Available capacities for this user: $available"
+    }
+
+    Write-Host "Resolved Fabric capacity GUID: $($match.id) ($($match.displayName), $($match.state))"
+    return $match.id
 }
 
 function Get-FabricWorkspaceByName {

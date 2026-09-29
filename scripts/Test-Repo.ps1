@@ -20,9 +20,19 @@ Write-Host "Validating PowerShell scripts..."
 Get-ChildItem -Path (Join-Path $repoRoot "scripts") -Filter *.ps1 | ForEach-Object {
     $tokens = $null
     $errors = $null
-    [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors) | Out-Null
+    $ast = [System.Management.Automation.Language.Parser]::ParseFile($_.FullName, [ref]$tokens, [ref]$errors)
     if ($errors.Count -gt 0) {
         throw ($errors | Out-String)
+    }
+    if ($_.Name -eq "Deploy-FabricDemo.ps1") {
+        $functionNames = @($ast.EndBlock.Statements |
+            Where-Object { $_ -is [System.Management.Automation.Language.FunctionDefinitionAst] } |
+            ForEach-Object { $_.Name })
+        foreach ($requiredFunction in @("Invoke-FabricRest", "Resolve-FabricCapacityId", "New-OrGetWorkspace")) {
+            if ($functionNames -notcontains $requiredFunction) {
+                throw "Missing top-level function '$requiredFunction' in $($_.Name)"
+            }
+        }
     }
     Write-Host "OK $($_.FullName.Substring($repoRoot.Length + 1))"
 }
