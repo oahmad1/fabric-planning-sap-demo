@@ -316,12 +316,10 @@ Write-Host "Summary: $summaryPath"
 
 if ($CompleteSetup) {
     $completeScript = Join-Path $PSScriptRoot "Complete-DemoSetup.ps1"
-    $completeArgs = @(
-        "-DeploymentSummaryPath", $summaryPath,
-        "-RunNotebook"
-    )
-    if ($WaitForNotebook) { $completeArgs += "-WaitForNotebook" }
-    if ($CreateSqlDatabase) { $completeArgs += "-CreateSqlDatabase" }
-    if ($AttemptPreviewAutomation) { $completeArgs += "-AttemptPreviewItems" }
-    & $completeScript @completeArgs
+    & $completeScript `
+        -DeploymentSummaryPath $summaryPath `
+        -RunNotebook `
+        -WaitForNotebook:$WaitForNotebook `
+        -CreateSqlDatabase:$CreateSqlDatabase `
+        -AttemptPreviewItems:$AttemptPreviewAutomation
 }
