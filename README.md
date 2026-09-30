@@ -20,12 +20,12 @@ The demo uses dummy SAP S/4HANA-like data today and is structured so the source 
 - Fabric workspace creation.
 - Optional capacity assignment if you provide a capacity ID.
 - Lakehouse creation.
-- Warehouse creation.
-- Notebook creation with a load-and-model notebook.
-- Optional ontology shell creation.
+- Notebook creation or update with a load-and-model notebook.
+- Notebook execution to seed dummy SAP-style data.
+- Direct Lake semantic model creation or update over the gold tables.
 - Deployment summary output with item IDs and next-step URLs.
 
-Fabric Planning item creation, Planning sheet layout, Data Agent creation, and M365 Copilot enablement can be tenant-feature dependent and are not currently represented in the public REST item support matrix in the same way as Lakehouse, Warehouse, Notebook, and Ontology. This repo includes guided setup files for those steps.
+The clean demo needs only a workspace, lakehouse, notebook, and semantic model. Warehouse, ontology, Fabric SQL database, Data Agent, and preview Plan item creation are optional add-ons; they are not created by default because they add assets without improving the first-run Planning demo.
 
 ## Prerequisites
 
@@ -49,11 +49,8 @@ cd ./fabric-planning-sap-demo
   -TenantId "<tenant-id>" `
   -WorkspaceName "Fabric SAP Planning Demo" `
   -CapacityId "<fabric-capacity-guid-or-resource-id>" `
-  -CreateOntology `
   -CompleteSetup `
-  -WaitForNotebook `
-  -CreateSqlDatabase `
-  -AttemptPreviewAutomation
+  -WaitForNotebook
 ```
 
 ### Local PowerShell
@@ -65,26 +62,32 @@ cd .\fabric-planning-sap-demo
   -TenantId "<tenant-id>" `
   -WorkspaceName "Fabric SAP Planning Demo" `
   -CapacityId "<fabric-capacity-id>" `
-  -CreateOntology `
   -CompleteSetup `
-  -WaitForNotebook `
-  -CreateSqlDatabase `
-  -AttemptPreviewAutomation
+  -WaitForNotebook
 ```
 
-The command creates the API-supported Fabric items, starts the notebook that seeds the lakehouse, attempts Fabric SQL database creation for Planning writeback, and attempts preview item creation for Planning/Data Agent where the tenant accepts those item types.
+The command creates the API-supported Fabric items, starts the notebook that seeds the lakehouse, and creates or updates `SAP Planning Semantic Model` over the gold planning tables.
 
 `-CapacityId` accepts either the Fabric capacity GUID or the full Azure resource ID for a `Microsoft.Fabric/capacities` resource. If you pass the full Azure resource ID, the script resolves it to the Fabric capacity GUID by listing capacities you can access.
 
-If your tenant rejects Planning/Data Agent/SQL database creation through public APIs, continue with the generated instructions in `outputs\post-deployment-summary.json`.
+Optional switches:
+
+| Switch | Use when |
+| --- | --- |
+| `-CreateWarehouse` | You want a Warehouse shell for a SQL/reporting variant of the demo. Not needed for Planning. |
+| `-CreateOntology` | You want to discuss Fabric ontology as an optional semantic layer. Not needed for Planning. |
+| `-CreateSqlDatabase` | You want to attempt a separate writeback database. Not needed to start the Planning demo because Plan items create their own backing database. |
+| `-AttemptPreviewAutomation` | You want to attempt tenant-supported preview item creation for Plan/Data Agent. Manual UI setup is still the reliable path. |
 
 After deployment:
 
 1. Open the generated `outputs\deployment-summary.json`.
 2. Open `outputs\post-deployment-summary.json`.
-3. Confirm the notebook job completed and the semantic model was discovered.
-4. If Planning/Data Agent/SQL database creation was marked `ManualRequired`, follow `docs\fabric-planning-setup.md`.
-5. Use `docs\demo-script.md` to run the sales demo.
+3. Confirm the notebook job completed and `SAP Planning Semantic Model` was created or updated.
+4. Confirm the semantic model has five tables: `gold_time_period`, `gold_inventory_position`, `gold_plan_vs_actual`, `gold_replenishment_plan`, and `gold_supplier_performance`.
+5. Create a new Plan item in Fabric and connect it to `SAP Planning Semantic Model`.
+6. In Planning time mapping, use `gold_time_period[period_start_date]`.
+7. Use `docs\demo-script.md` to run the sales demo.
 
 You can also run post-deployment setup separately:
 
@@ -92,9 +95,7 @@ You can also run post-deployment setup separately:
 .\scripts\Complete-DemoSetup.ps1 `
   -DeploymentSummaryPath .\outputs\deployment-summary.json `
   -RunNotebook `
-  -WaitForNotebook `
-  -CreateSqlDatabase `
-  -AttemptPreviewItems
+  -WaitForNotebook
 ```
 
 ## Subject areas
@@ -133,4 +134,4 @@ When SAP access is available, replace the dummy CSV/notebook source step with Bu
 - Inventory position.
 - Planning scenario.
 
-The downstream planning, Power BI, Data Agent, and ontology story can remain the same.
+The downstream planning, Power BI, Data Agent, and optional ontology story can remain the same.

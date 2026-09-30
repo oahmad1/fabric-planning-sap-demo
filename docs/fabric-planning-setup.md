@@ -1,63 +1,65 @@
 # Fabric Planning Setup
 
-Use this after `scripts\Deploy-FabricDemo.ps1` creates the workspace, lakehouse, warehouse, and notebook.
+Use this after `scripts\Deploy-FabricDemo.ps1` creates the workspace, lakehouse, notebook, and semantic model.
 
-## 1. Seed the lakehouse
+## 1. Confirm the lakehouse data
 
-1. Open the deployed notebook named `Load SAP Planning Demo`.
-2. Attach `SAPPlanningLakehouse` as the default lakehouse if prompted.
-3. Run all cells.
-4. Confirm the following gold tables exist:
-   - `gold_inventory_position`
-   - `gold_supplier_performance`
-   - `gold_replenishment_plan`
-   - `gold_plan_vs_actual`
+The deployment script runs the notebook automatically when you use `-CompleteSetup -WaitForNotebook`.
 
-## 2. Create the semantic model
+Confirm the following gold tables exist in `SAPPlanningLakehouse`:
 
-Create or use a semantic model over these gold tables:
-
+- `gold_time_period`
 - `gold_inventory_position`
 - `gold_supplier_performance`
 - `gold_replenishment_plan`
 - `gold_plan_vs_actual`
 
-Recommended measures:
+## 2. Confirm the semantic model
 
-- Available Qty = sum of available quantity.
-- Planned Demand Qty = sum of planned demand quantity.
-- Reorder Qty = sum of reorder quantity.
-- Working Capital Impact = sum of working capital impact.
-- Stockout Risk Count = count of rows where stockout risk is High or Medium.
-- Service Recovery Qty = projected inventory after revised plan minus projected inventory before plan.
+Open `SAP Planning Semantic Model` and confirm it has these five tables:
 
-## 3. Create the Planning writeback database
+- `gold_time_period`
+- `gold_inventory_position`
+- `gold_supplier_performance`
+- `gold_replenishment_plan`
+- `gold_plan_vs_actual`
 
-Fabric Planning writeback supports Fabric SQL database. Create a SQL database named `PlanningWriteback`, then run `sql\planning_writeback_schema.sql`.
+Recommended measures are created on `gold_plan_vs_actual`:
 
-If Planning creates its own writeback table during setup, map fields to these demo concepts:
+- Available Qty
+- Planned Demand Qty
+- Reorder Qty
+- Working Capital Impact
+- Projected Inventory After Plan
+- High Risk Count
 
-- Scenario ID.
-- Scenario name.
-- Material.
-- Plant.
-- Demand uplift percent.
-- Safety stock days.
-- Lead-time override days.
-- Reorder quantity.
-- Planner comment.
+## 3. Configure Planning time mapping
+
+When creating or configuring the Plan item, use:
+
+- Time table: `gold_time_period`
+- Time column: `period_start_date`
+- Month label: `year_month`
+
+A separate SQL database is not required for the first-run demo. Fabric Planning creates backing storage for the Plan item as needed.
 
 ## 4. Create the Fabric Planning item
 
 Create a new Planning item in the same workspace.
 
-Connect it to the semantic model from step 2. Add a planning sheet with these rows and columns:
+Connect it to `SAP Planning Semantic Model` using a Power BI Semantic Model cloud connection owned by an account that has:
 
-- Rows: Product family, material, plant.
-- Actuals: Available quantity, open demand, open inbound supply.
-- Baseline plan: Baseline forecast, baseline reorder quantity, baseline projected inventory.
-- Planner inputs: Demand uplift percent, safety stock days, lead-time override days, revised reorder quantity.
-- Outcomes: Revised projected inventory, risk before plan, risk after plan, working capital impact.
+- Member or Admin access to workspace `Fabric SAP Planning Demo`.
+- Build permission on `SAP Planning Semantic Model`.
+
+Add a planning sheet with these rows and columns:
+
+- Rows: product family, material, plant.
+- Time: `gold_time_period[period_start_date]`.
+- Actuals: available quantity, open demand, open inbound supply.
+- Baseline plan: baseline forecast, baseline reorder quantity, baseline projected inventory.
+- Planner inputs: demand uplift percent, safety stock days, lead-time override days, revised reorder quantity.
+- Outcomes: revised projected inventory, risk before plan, risk after plan, working capital impact.
 
 Suggested planning interaction:
 
@@ -65,11 +67,11 @@ Suggested planning interaction:
 2. Increase safety stock for high-risk supplier/material combinations.
 3. Increase reorder quantity for `MAT-400` in `PL-20`.
 4. Add comments explaining the planning decision.
-5. Write the revised plan back to Fabric SQL.
+5. Save the revised plan.
 
-## 5. Create the Data Agent
+## 5. Optional Data Agent
 
-Create a Fabric Data Agent and add the lakehouse, semantic model, ontology if created, and planning writeback database if available.
+Create a Fabric Data Agent and add the lakehouse and semantic model. Add ontology only if you created the optional ontology item.
 
 Paste the content from `agents\data-agent-instructions.md` into the agent instructions.
 
@@ -78,4 +80,3 @@ Paste the content from `agents\data-agent-instructions.md` into the agent instru
 If your tenant supports M365 Copilot access to Fabric IQ/Data Agent experiences, use the prompts in `docs\m365-copilot-questions.md`.
 
 If not, run the same prompts directly in the Fabric Data Agent.
-

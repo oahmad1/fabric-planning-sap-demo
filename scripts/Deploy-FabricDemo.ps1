@@ -10,6 +10,7 @@ param(
     [string]$WarehouseName = "SAPPlanningWarehouse",
     [string]$NotebookName = "Load SAP Planning Demo",
     [string]$OntologyName = "SAP_Planning_Ontology",
+    [switch]$CreateWarehouse,
     [switch]$CreateOntology,
     [switch]$CompleteSetup,
     [switch]$WaitForNotebook,
@@ -221,34 +222,39 @@ function New-OrGetOntology {
 
 function New-OrGetNotebook {
     param([string]$WorkspaceId)
-    $item = Get-FabricItemByName -WorkspaceId $WorkspaceId -Type "Notebook" -Name $NotebookName
-    if ($item) {
-        Write-Host "Notebook exists: $NotebookName ($($item.id))"
-        return $item
-    }
-
     $notebookPath = Join-Path $repoRoot "notebooks\Load-SAP-Planning-Demo.ipynb"
     if (-not (Test-Path $notebookPath)) {
         throw "Notebook file not found: $notebookPath"
     }
 
-    $payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Content $notebookPath -Raw)))
+    $definition = @{
+        format = "ipynb"
+        parts = @(
+            @{
+                path = "notebook-content.ipynb"
+                payload = [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes((Get-Content $notebookPath -Raw)))
+                payloadType = "InlineBase64"
+            }
+        )
+    }
+
+    $item = Get-FabricItemByName -WorkspaceId $WorkspaceId -Type "Notebook" -Name $NotebookName
+    if ($item) {
+        Write-Host "Notebook exists: $NotebookName ($($item.id))"
+        Write-Host "Updating notebook definition so redeploys use the latest demo content."
+        Invoke-FabricRest -Method post `
+            -Url "https://api.fabric.microsoft.com/v1/workspaces/$WorkspaceId/notebooks/$($item.id)/updateDefinition" `
+            -Body @{ definition = $definition } | Out-Null
+        return $item
+    }
+
     Write-Host "Creating notebook: $NotebookName"
     return Invoke-FabricRest -Method post `
         -Url "https://api.fabric.microsoft.com/v1/workspaces/$WorkspaceId/notebooks" `
         -Body @{
             displayName = $NotebookName
             description = "Loads dummy SAP-style actuals and planning scenario tables into the demo lakehouse."
-            definition = @{
-                format = "ipynb"
-                parts = @(
-                    @{
-                        path = "notebook-content.ipynb"
-                        payload = $payload
-                        payloadType = "InlineBase64"
-                    }
-                )
-            }
+            definition = $definition
         }
 }
 
@@ -278,7 +284,10 @@ if (-not [string]::IsNullOrWhiteSpace($CapacityId)) {
 }
 
 $lakehouse = New-OrGetLakehouse -WorkspaceId $workspaceId
-$warehouse = New-OrGetWarehouse -WorkspaceId $workspaceId
+$warehouse = $null
+if ($CreateWarehouse) {
+    $warehouse = New-OrGetWarehouse -WorkspaceId $workspaceId
+}
 $notebook = New-OrGetNotebook -WorkspaceId $workspaceId
 $ontology = $null
 if ($CreateOntology) {
@@ -291,18 +300,17 @@ $summary = [ordered]@{
     workspaceId = $workspaceId
     lakehouseName = $LakehouseName
     lakehouseId = $lakehouse.id
-    warehouseName = $WarehouseName
-    warehouseId = $warehouse.id
+    warehouseName = if ($warehouse) { $WarehouseName } else { $null }
+    warehouseId = if ($warehouse) { $warehouse.id } else { $null }
     notebookName = $NotebookName
     notebookId = $notebook.id
     ontologyName = if ($ontology) { $OntologyName } else { $null }
     ontologyId = if ($ontology) { $ontology.id } else { $null }
     nextSteps = @(
-        "Open the notebook in Fabric, attach the lakehouse as the default lakehouse if prompted, and run all cells.",
-        "Create a semantic model over the gold tables listed in docs\\fabric-planning-setup.md.",
-        "Create a Fabric SQL database for Planning writeback.",
+        "The notebook seeds dummy SAP-style data into the lakehouse.",
+        "The semantic model is created over the gold planning tables.",
         "Create a Fabric Planning item and configure sheets using docs\\fabric-planning-setup.md.",
-        "Create a Data Agent using agents\\data-agent-instructions.md.",
+        "Optionally create a Data Agent using agents\\data-agent-instructions.md.",
         "Use docs\\demo-script.md and docs\\m365-copilot-questions.md for the sales demo."
     )
 }

@@ -342,9 +342,10 @@ expression DL_Lakehouse =
 
     $tables = @(
         @{
-            Path = "definition/tables/gold_date.tmdl"
-            Content = New-TmdlTablePart -TableName "gold_date" -Columns @(
-                New-Column "date" "dateTime" -IsKey
+            Path = "definition/tables/gold_time_period.tmdl"
+            Content = New-TmdlTablePart -TableName "gold_time_period" -Columns @(
+                New-Column "time_period_id" "int64" -IsKey
+                New-Column "period_start_date" "dateTime"
                 New-Column "year" "int64"
                 New-Column "quarter" "int64"
                 New-Column "month_number" "int64"
@@ -367,6 +368,7 @@ expression DL_Lakehouse =
                 New-Column "planning_owner" "string"
                 New-Column "forecast_month" "string"
                 New-Column "forecast_month_start" "dateTime"
+                New-Column "time_period_id" "int64"
                 New-Column "available_qty" "int64"
                 New-Column "open_purchase_order_qty" "int64"
                 New-Column "open_sales_order_qty" "int64"
@@ -397,6 +399,7 @@ expression DL_Lakehouse =
                 New-Column "planning_owner" "string"
                 New-Column "forecast_month" "string"
                 New-Column "forecast_month_start" "dateTime"
+                New-Column "time_period_id" "int64"
                 New-Column "on_hand_qty" "int64"
                 New-Column "allocated_qty" "int64"
                 New-Column "quality_hold_qty" "int64"
@@ -445,12 +448,12 @@ expression DL_Lakehouse =
 
     $relationshipsTmdl = @"
 relationship 'Plan vs Actual to Date'
-	fromColumn: gold_plan_vs_actual.forecast_month_start
-	toColumn: gold_date.date
+	fromColumn: gold_plan_vs_actual.time_period_id
+	toColumn: gold_time_period.time_period_id
 
 relationship 'Inventory Position to Date'
-	fromColumn: gold_inventory_position.forecast_month_start
-	toColumn: gold_date.date
+	fromColumn: gold_inventory_position.time_period_id
+	toColumn: gold_time_period.time_period_id
 "@
 
     $parts = @(
@@ -635,7 +638,7 @@ if ($selectedModel) {
 if ($CreateSqlDatabase) {
     $postSetup.planningWritebackDatabase = Try-CreateSqlDatabase
 } else {
-    $postSetup.nextSteps += "Run this script with -CreateSqlDatabase to attempt Fabric SQL database creation, or create PlanningWriteback manually in the Fabric portal."
+    $postSetup.nextSteps += "Create a new Plan item in Fabric and connect it to SAP Planning Semantic Model. Use gold_time_period[period_start_date] for time mapping."
 }
 
 if ($AttemptPreviewItems) {

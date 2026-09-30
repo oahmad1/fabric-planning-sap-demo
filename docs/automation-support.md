@@ -1,37 +1,31 @@
 # Automation Support
 
-The repo automates the Fabric APIs that are publicly documented for workspace and item management.
+The repo automates the stable Fabric API pieces needed for the first-run demo. Optional assets are available behind switches so the default deployment stays clean.
 
-## Automated
+## Default automated assets
 
-| Asset | Method |
+| Asset | Why it exists |
 | --- | --- |
-| Workspace | Fabric REST `POST /v1/workspaces` |
-| Capacity assignment | Fabric REST `POST /v1/workspaces/{workspaceId}/assignToCapacity` |
-| Lakehouse | Fabric REST `POST /v1/workspaces/{workspaceId}/lakehouses` |
-| Warehouse | Fabric REST `POST /v1/workspaces/{workspaceId}/warehouses` |
-| Notebook | Fabric REST `POST /v1/workspaces/{workspaceId}/notebooks` with ipynb definition |
-| Notebook execution | Fabric job scheduler with `jobType=RunNotebook` |
-| Ontology shell | Fabric REST `POST /v1/workspaces/{workspaceId}/ontologies` |
-| Default semantic model discovery | Fabric item listing for `SemanticModel` |
+| Workspace | Container for the demo. |
+| Lakehouse | Stores dummy SAP-style actuals and curated gold planning tables. |
+| Notebook | Loads dummy data and creates the gold tables. Redeploys update the notebook definition. |
+| Semantic model | Direct Lake model over the gold tables, including `gold_time_period` for Planning time mapping. |
 
-## Attempted when requested
+## Optional assets
 
-`scripts\Complete-DemoSetup.ps1 -AttemptPreviewItems -CreateSqlDatabase` attempts tenant-supported or preview item creation for:
-
-- Fabric SQL database named `PlanningWriteback`.
-- Data Agent named `SAP Planning Data Agent`.
-- Planning item named `SAP Inventory Planning`.
-
-If the tenant rejects an item type through the public API, the script records `ManualRequired` in `outputs\post-deployment-summary.json` and points to the guided setup docs.
+| Switch | Asset | Use when |
+| --- | --- | --- |
+| `-CreateWarehouse` | Warehouse shell | You want a SQL/reporting variant. Not needed for Planning. |
+| `-CreateOntology` | Ontology shell | You want to discuss Fabric ontology as an optional business-semantic layer. Not needed for Planning. |
+| `-CreateSqlDatabase` | `PlanningWriteback` SQL database attempt | You want to test separate SQL writeback. Not needed for the first-run demo. |
+| `-AttemptPreviewAutomation` | Plan/Data Agent item creation attempts | You want to test tenant-supported preview automation. Manual UI setup remains more reliable. |
 
 ## Guided because public automation varies by tenant or feature state
 
 | Asset | Why guided |
 | --- | --- |
-| Fabric Planning item and sheets | Planning items are not currently listed in the public Fabric REST item-management support matrix like Lakehouse, Warehouse, Notebook, and Ontology. |
-| Fabric SQL database for Planning writeback | The script attempts known endpoints, but public portal docs remain the reliable path when tenants reject API creation. |
-| Fabric Data Agent creation | The script attempts generic item creation when requested, but configuration APIs are not exposed in the same public REST item-management pattern used by core items. |
+| Fabric Planning item and sheets | Planning item configuration and sheet layout are tenant-feature dependent and connection-sensitive. |
+| Fabric Data Agent configuration | Data Agent creation/configuration APIs are not exposed in the same public REST item-management pattern used by core items. |
 | M365 Chat integration | Requires tenant Copilot/Fabric settings and user licensing; user experience can vary by rollout state. |
 
-The repo still gives complete setup instructions for the guided pieces so the demo can be run end-to-end.
+The default command produces the data foundation and semantic model. Then create a new Plan item in the portal and connect it to `SAP Planning Semantic Model`.
