@@ -16,7 +16,7 @@ Confirm the following gold tables exist in `SAPPlanningLakehouse`:
 
 ## 2. Confirm the semantic model
 
-Open `SAP Planning Semantic Model` and confirm it has these five tables:
+Open `SAP Planning Semantic Model` and confirm it has these five tables. The model is Import mode for Planning compatibility; the lakehouse remains the source/data-foundation part of the demo story:
 
 - `gold_time_period`
 - `gold_inventory_position`

@@ -238,6 +238,22 @@ function Get-SemanticModels {
     return @($result.Content.value)
 }
 
+function Start-SemanticModelRefresh {
+    param([string]$SemanticModelId)
+
+    if ([string]::IsNullOrWhiteSpace($SemanticModelId)) {
+        return
+    }
+
+    $workspaceId = $summary.workspaceId
+    $url = "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/items/$SemanticModelId/jobs/instances?jobType=Refresh"
+    Write-Host "Refreshing semantic model $SemanticModelId..."
+    $result = Invoke-FabricApi -Method POST -Url $url -AllowFailure
+    if ($result.StatusCode -notin @(200, 202)) {
+        Write-Warning "Semantic model refresh was not accepted: $($result.RawContent)"
+    }
+}
+
 function ConvertTo-Base64String {
     param([string]$Value)
     return [Convert]::ToBase64String([Text.Encoding]::UTF8.GetBytes($Value))
@@ -297,11 +313,96 @@ function New-Column {
     }
 }
 
-function New-SemanticModelDefinition {
-    $workspaceId = $summary.workspaceId
-    $lakehouseId = $summary.lakehouseId
-    $oneLakeUrl = "https://onelake.dfs.fabric.microsoft.com/$workspaceId/$lakehouseId"
+function ConvertTo-MValue {
+    param(
+        [object]$Value,
+        [string]$Type
+    )
 
+    if ($null -eq $Value) {
+        return "null"
+    }
+
+    switch ($Type) {
+        "string" {
+            return '"' + ([string]$Value).Replace('"', '""') + '"'
+        }
+        "dateTime" {
+            $date = [datetime]$Value
+            return "#datetime($($date.Year), $($date.Month), $($date.Day), 0, 0, 0)"
+        }
+        "decimal" {
+            return ([Convert]::ToString([decimal]$Value, [Globalization.CultureInfo]::InvariantCulture))
+        }
+        default {
+            return ([Convert]::ToString($Value, [Globalization.CultureInfo]::InvariantCulture))
+        }
+    }
+}
+
+function Get-MType {
+    param([string]$Type)
+    switch ($Type) {
+        "string" { return "text" }
+        "int64" { return "Int64.Type" }
+        "decimal" { return "number" }
+        "dateTime" { return "datetime" }
+        default { return "text" }
+    }
+}
+
+function New-ImportTablePart {
+    param(
+        [string]$TableName,
+        [array]$Columns,
+        [array]$Rows,
+        [string[]]$Measures = @()
+    )
+
+    $schema = ($Columns | ForEach-Object { "$($_.Name) = $(Get-MType $_.Type)" }) -join ", "
+    $rowText = ($Rows | ForEach-Object {
+        $row = $_
+        "                {" + (($Columns | ForEach-Object { ConvertTo-MValue $row[$_.Name] $_.Type }) -join ", ") + "}"
+    }) -join ",`n"
+
+    $lines = New-Object System.Collections.Generic.List[string]
+    $lines.Add("table $TableName")
+    $lines.Add("")
+    foreach ($measure in $Measures) {
+        $lines.Add($measure)
+        $lines.Add("")
+    }
+    foreach ($column in $Columns) {
+        $lines.Add("`tcolumn $($column.Name)")
+        $lines.Add("`t`tdataType: $($column.Type)")
+        if ($column.IsHidden) {
+            $lines.Add("`t`tisHidden")
+        }
+        if ($column.IsKey) {
+            $lines.Add("`t`tisKey")
+        }
+        if ($column.Type -eq "string") {
+            $lines.Add("`t`tsummarizeBy: none")
+        }
+        $lines.Add("`t`tsourceColumn: $($column.Source)")
+        $lines.Add("")
+    }
+    $lines.Add("`tpartition $TableName = m")
+    $lines.Add("`t`tmode: import")
+    $lines.Add("`t`tsource =")
+    $lines.Add("`t`t`tlet")
+    $lines.Add("`t`t`t`tSource = #table(")
+    $lines.Add("`t`t`t`t`ttype table [$schema],")
+    $lines.Add("`t`t`t`t`t{")
+    $lines.Add($rowText)
+    $lines.Add("`t`t`t`t`t}")
+    $lines.Add("`t`t`t`t)")
+    $lines.Add("`t`t`tin")
+    $lines.Add("`t`t`t`tSource")
+    return ($lines -join "`n")
+}
+
+function New-SemanticModelDefinition {
     $definitionPbism = @"
 {
   "`$schema": "https://developer.microsoft.com/json-schemas/fabric/item/semanticModel/definitionProperties/1.0.0/schema.json",
@@ -323,12 +424,6 @@ model Model
 	culture: en-US
 	defaultPowerBIDataSourceVersion: powerBI_V3
 	discourageImplicitMeasures
-
-expression DL_Lakehouse =
-	let
-		Source = AzureStorage.DataLake("$oneLakeUrl", [HierarchicalNavigation=true])
-	in
-		Source
 "@
 
     $planMeasures = @(
@@ -340,10 +435,36 @@ expression DL_Lakehouse =
         "`tmeasure 'High Risk Count' = COUNTROWS(FILTER('gold_plan_vs_actual', 'gold_plan_vs_actual'[stockout_risk_after_plan] = `"High`"))`n`t`tformatString: #,##0"
     )
 
+    $timeRows = @(
+        @{ time_period_id = 202610; period_start_date = "2026-10-01"; year = 2026; quarter = 4; month_number = 10; month_name = "October"; year_month = "2026-10" }
+    )
+    $planRows = @(
+        @{ scenario_id = "BASELINE"; scenario_name = "Current baseline plan"; scenario_type = "Baseline"; material_id = "MAT-100"; material_name = "Contoso Smart Sensor"; product_family = "Electronics"; plant_id = "PL-30"; plant_name = "Atlanta Fulfillment Center"; region = "East"; planning_owner = "Jordan Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 300; open_sales_order_qty = 220; baseline_demand_qty = 560; consensus_demand_qty = 680; planned_demand_qty = 680; safety_stock_days = 10; lead_time_override_days = 31; reorder_qty = 450; projected_inventory_after_plan = 140; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Medium"; working_capital_impact = 18900; supplier_delay_risk = "High" }
+        @{ scenario_id = "REV1"; scenario_name = "Planner revised replenishment"; scenario_type = "Revised"; material_id = "MAT-100"; material_name = "Contoso Smart Sensor"; product_family = "Electronics"; plant_id = "PL-30"; plant_name = "Atlanta Fulfillment Center"; region = "East"; planning_owner = "Jordan Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 300; open_sales_order_qty = 220; baseline_demand_qty = 560; consensus_demand_qty = 680; planned_demand_qty = 734; safety_stock_days = 15; lead_time_override_days = 36; reorder_qty = 620; projected_inventory_after_plan = 256; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Low"; working_capital_impact = 26040; supplier_delay_risk = "High" }
+        @{ scenario_id = "BASELINE"; scenario_name = "Current baseline plan"; scenario_type = "Baseline"; material_id = "MAT-400"; material_name = "AdventureWorks Battery Pack"; product_family = "Electronics"; plant_id = "PL-20"; plant_name = "Chicago Manufacturing Hub"; region = "Central"; planning_owner = "Casey Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 420; open_sales_order_qty = 360; baseline_demand_qty = 610; consensus_demand_qty = 790; planned_demand_qty = 790; safety_stock_days = 10; lead_time_override_days = 31; reorder_qty = 520; projected_inventory_after_plan = 220; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Medium"; working_capital_impact = 18200; supplier_delay_risk = "High" }
+        @{ scenario_id = "REV1"; scenario_name = "Planner revised replenishment"; scenario_type = "Revised"; material_id = "MAT-400"; material_name = "AdventureWorks Battery Pack"; product_family = "Electronics"; plant_id = "PL-20"; plant_name = "Chicago Manufacturing Hub"; region = "Central"; planning_owner = "Casey Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 420; open_sales_order_qty = 360; baseline_demand_qty = 610; consensus_demand_qty = 790; planned_demand_qty = 884; safety_stock_days = 16; lead_time_override_days = 38; reorder_qty = 760; projected_inventory_after_plan = 366; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Low"; working_capital_impact = 26600; supplier_delay_risk = "High" }
+        @{ scenario_id = "REV1"; scenario_name = "Planner revised replenishment"; scenario_type = "Revised"; material_id = "MAT-300"; material_name = "Northwind Pump Kit"; product_family = "Industrial"; plant_id = "PL-20"; plant_name = "Chicago Manufacturing Hub"; region = "Central"; planning_owner = "Casey Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 25; open_purchase_order_qty = 240; open_sales_order_qty = 190; baseline_demand_qty = 390; consensus_demand_qty = 470; planned_demand_qty = 517; safety_stock_days = 12; lead_time_override_days = 24; reorder_qty = 390; projected_inventory_after_plan = 138; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Medium"; working_capital_impact = 46020; supplier_delay_risk = "Medium" }
+    )
+    $inventoryRows = $planRows |
+        Where-Object { $_.scenario_id -eq "REV1" } |
+        ForEach-Object {
+            @{
+                snapshot_date = "2026-09-01"; material_id = $_.material_id; material_name = $_.material_name; product_family = $_.product_family; unit_cost = if ($_.material_id -eq "MAT-300") { 118 } elseif ($_.material_id -eq "MAT-400") { 35 } else { 42 }; plant_id = $_.plant_id; plant_name = $_.plant_name; region = $_.region; planning_owner = $_.planning_owner; forecast_month = $_.forecast_month; forecast_month_start = $_.forecast_month_start; time_period_id = $_.time_period_id; on_hand_qty = $_.available_qty + 390; allocated_qty = 390; quality_hold_qty = 0; available_qty = $_.available_qty; open_sales_order_qty = $_.open_sales_order_qty; baseline_demand_qty = $_.baseline_demand_qty; consensus_demand_qty = $_.consensus_demand_qty; open_purchase_order_qty = $_.open_purchase_order_qty; supplier_delay_risk = $_.supplier_delay_risk; stockout_risk_before_plan = $_.stockout_risk_before_plan
+            }
+        }
+    $supplierRows = @(
+        @{ supplier_id = "SUP-01"; supplier_name = "Alpine Components"; country = "US"; risk_tier = "Low"; standard_lead_time_days = 12; avg_days_late = 1; supplier_delay_risk = "Low" }
+        @{ supplier_id = "SUP-02"; supplier_name = "Blue Yonder Metals"; country = "MX"; risk_tier = "Medium"; standard_lead_time_days = 18; avg_days_late = 2; supplier_delay_risk = "Medium" }
+        @{ supplier_id = "SUP-03"; supplier_name = "Contoso Electronics"; country = "TW"; risk_tier = "High"; standard_lead_time_days = 31; avg_days_late = 6; supplier_delay_risk = "High" }
+    )
+    $replenishmentRows = $planRows | ForEach-Object {
+        @{ scenario_id = $_.scenario_id; scenario_name = $_.scenario_name; scenario_type = $_.scenario_type; material_id = $_.material_id; material_name = $_.material_name; product_family = $_.product_family; plant_id = $_.plant_id; plant_name = $_.plant_name; region = $_.region; planning_owner = $_.planning_owner; demand_uplift_pct = if ($_.scenario_id -eq "REV1") { 0.10 } else { 0.00 }; safety_stock_days = $_.safety_stock_days; lead_time_override_days = $_.lead_time_override_days; reorder_qty = $_.reorder_qty; working_capital_impact = $_.working_capital_impact }
+    }
+
     $tables = @(
         @{
             Path = "definition/tables/gold_time_period.tmdl"
-            Content = New-TmdlTablePart -TableName "gold_time_period" -Columns @(
+            Content = New-ImportTablePart -TableName "gold_time_period" -Rows $timeRows -Columns @(
                 New-Column "time_period_id" "int64" -IsKey
                 New-Column "period_start_date" "dateTime"
                 New-Column "year" "int64"
@@ -355,7 +476,7 @@ expression DL_Lakehouse =
         }
         @{
             Path = "definition/tables/gold_plan_vs_actual.tmdl"
-            Content = New-TmdlTablePart -TableName "gold_plan_vs_actual" -Measures $planMeasures -Columns @(
+            Content = New-ImportTablePart -TableName "gold_plan_vs_actual" -Rows $planRows -Measures $planMeasures -Columns @(
                 New-Column "scenario_id" "string"
                 New-Column "scenario_name" "string"
                 New-Column "scenario_type" "string"
@@ -387,7 +508,7 @@ expression DL_Lakehouse =
         }
         @{
             Path = "definition/tables/gold_inventory_position.tmdl"
-            Content = New-TmdlTablePart -TableName "gold_inventory_position" -Columns @(
+            Content = New-ImportTablePart -TableName "gold_inventory_position" -Rows $inventoryRows -Columns @(
                 New-Column "snapshot_date" "string"
                 New-Column "material_id" "string"
                 New-Column "material_name" "string"
@@ -414,7 +535,7 @@ expression DL_Lakehouse =
         }
         @{
             Path = "definition/tables/gold_supplier_performance.tmdl"
-            Content = New-TmdlTablePart -TableName "gold_supplier_performance" -Columns @(
+            Content = New-ImportTablePart -TableName "gold_supplier_performance" -Rows $supplierRows -Columns @(
                 New-Column "supplier_id" "string"
                 New-Column "supplier_name" "string"
                 New-Column "country" "string"
@@ -426,7 +547,7 @@ expression DL_Lakehouse =
         }
         @{
             Path = "definition/tables/gold_replenishment_plan.tmdl"
-            Content = New-TmdlTablePart -TableName "gold_replenishment_plan" -Columns @(
+            Content = New-ImportTablePart -TableName "gold_replenishment_plan" -Rows $replenishmentRows -Columns @(
                 New-Column "scenario_id" "string"
                 New-Column "scenario_name" "string"
                 New-Column "scenario_type" "string"
@@ -480,11 +601,14 @@ function Try-CreateSemanticModel {
         Where-Object { $_.displayName -eq $modelName } |
         Select-Object -First 1
     if ($existing) {
-        Write-Host "Updating semantic model '$modelName' with planning date metadata..."
+        Write-Host "Updating semantic model '$modelName' with Planning-compatible import tables..."
         $updateUrl = "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/semanticModels/$($existing.id)/updateDefinition"
         $updateResult = Invoke-FabricApi -Method POST -Url $updateUrl -Body @{ definition = New-SemanticModelDefinition } -AllowFailure
         if ($updateResult.StatusCode -notin @(200, 202)) {
             Write-Warning "Semantic model update was not accepted: $($updateResult.RawContent)"
+        }
+        else {
+            Start-SemanticModelRefresh -SemanticModelId $existing.id
         }
         return $existing
     }
@@ -492,7 +616,7 @@ function Try-CreateSemanticModel {
     Write-Host "Creating semantic model '$modelName' over gold lakehouse tables..."
     $body = @{
         displayName = $modelName
-        description = "Direct Lake semantic model over SAP-style inventory planning gold tables."
+        description = "Import semantic model with Planning-compatible SAP-style inventory planning demo data."
         definition = New-SemanticModelDefinition
     }
     $url = "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/semanticModels"
@@ -511,6 +635,7 @@ function Try-CreateSemanticModel {
             Select-Object -First 1
         if ($created) {
             Write-Host "Semantic model created: $($created.id)"
+            Start-SemanticModelRefresh -SemanticModelId $created.id
             return $created
         }
     } while ((Get-Date) -lt $deadline)

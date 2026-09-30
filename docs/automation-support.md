@@ -9,7 +9,7 @@ The repo automates the stable Fabric API pieces needed for the first-run demo. O
 | Workspace | Container for the demo. |
 | Lakehouse | Stores dummy SAP-style actuals and curated gold planning tables. |
 | Notebook | Loads dummy data and creates the gold tables. Redeploys update the notebook definition. |
-| Semantic model | Direct Lake model over the gold tables, including `gold_time_period` for Planning time mapping. |
+| Semantic model | Planning-compatible Import model seeded with the same curated demo data, including `gold_time_period` for Planning time mapping. |
 
 ## Optional assets
 

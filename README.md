@@ -22,7 +22,7 @@ The demo uses dummy SAP S/4HANA-like data today and is structured so the source 
 - Lakehouse creation.
 - Notebook creation or update with a load-and-model notebook.
 - Notebook execution to seed dummy SAP-style data.
-- Direct Lake semantic model creation or update over the gold tables.
+- Planning-compatible Import semantic model creation or update using the same curated demo data.
 - Deployment summary output with item IDs and next-step URLs.
 
 The clean demo needs only a workspace, lakehouse, notebook, and semantic model. Warehouse, ontology, Fabric SQL database, Data Agent, and preview Plan item creation are optional add-ons; they are not created by default because they add assets without improving the first-run Planning demo.
