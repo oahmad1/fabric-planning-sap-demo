@@ -112,6 +112,10 @@ If the full layout feels busy, start with only these:
 - Columns: `scenario_name`
 - Values: `Reorder Qty`, `Projected Inventory After Plan`, `Working Capital Delta`, `Risk Reduction Count`, `Service Level Improvement %`
 
+### Troubleshooting blank scenario cells
+
+If a row appears blank under one scenario, it usually means that material/plant combination exists in only one scenario. The demo data includes matching baseline and revised rows for the main materials, including `Northwind Pump Kit` in `Chicago Manufacturing Hub`, so rerun `scripts\Complete-DemoSetup.ps1` after pulling the latest repo if you see blanks.
+
 Suggested planning interaction:
 
 1. Filter to Electronics and Industrial product families.
