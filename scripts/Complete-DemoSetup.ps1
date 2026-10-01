@@ -241,17 +241,7 @@ function Get-SemanticModels {
 function Start-SemanticModelRefresh {
     param([string]$SemanticModelId)
 
-    if ([string]::IsNullOrWhiteSpace($SemanticModelId)) {
-        return
-    }
-
-    $workspaceId = $summary.workspaceId
-    $url = "https://api.fabric.microsoft.com/v1/workspaces/$workspaceId/items/$SemanticModelId/jobs/instances?jobType=Refresh"
-    Write-Host "Refreshing semantic model $SemanticModelId..."
-    $result = Invoke-FabricApi -Method POST -Url $url -AllowFailure
-    if ($result.StatusCode -notin @(200, 202)) {
-        Write-Warning "Semantic model refresh was not accepted: $($result.RawContent)"
-    }
+    Write-Host "Semantic model $SemanticModelId uses embedded import demo data; refresh is not required."
 }
 
 function ConvertTo-Base64String {
@@ -431,19 +421,25 @@ model Model
         "`tmeasure 'Planned Demand Qty' = SUM('gold_plan_vs_actual'[planned_demand_qty])`n`t`tformatString: #,##0",
         "`tmeasure 'Reorder Qty' = SUM('gold_plan_vs_actual'[reorder_qty])`n`t`tformatString: #,##0",
         "`tmeasure 'Working Capital Impact' = SUM('gold_plan_vs_actual'[working_capital_impact])`n`t`tformatString: `$#,##0",
+        "`tmeasure 'Working Capital Delta' = SUM('gold_plan_vs_actual'[working_capital_delta])`n`t`tformatString: `$#,##0",
         "`tmeasure 'Projected Inventory After Plan' = SUM('gold_plan_vs_actual'[projected_inventory_after_plan])`n`t`tformatString: #,##0",
-        "`tmeasure 'High Risk Count' = COUNTROWS(FILTER('gold_plan_vs_actual', 'gold_plan_vs_actual'[stockout_risk_after_plan] = `"High`"))`n`t`tformatString: #,##0"
+        "`tmeasure 'High Risk Before Count' = SUM('gold_plan_vs_actual'[high_risk_before_count])`n`t`tformatString: #,##0",
+        "`tmeasure 'High Risk After Count' = SUM('gold_plan_vs_actual'[high_risk_after_count])`n`t`tformatString: #,##0",
+        "`tmeasure 'Risk Reduction Count' = SUM('gold_plan_vs_actual'[risk_reduction_count])`n`t`tformatString: #,##0",
+        "`tmeasure 'Service Level Before %' = AVERAGE('gold_plan_vs_actual'[service_level_before_pct])`n`t`tformatString: 0.0%",
+        "`tmeasure 'Service Level After %' = AVERAGE('gold_plan_vs_actual'[service_level_after_pct])`n`t`tformatString: 0.0%",
+        "`tmeasure 'Service Level Improvement %' = AVERAGE('gold_plan_vs_actual'[service_level_delta_pct])`n`t`tformatString: 0.0%"
     )
 
     $timeRows = @(
         @{ time_period_id = 202610; period_start_date = "2026-10-01"; year = 2026; quarter = 4; month_number = 10; month_name = "October"; year_month = "2026-10" }
     )
     $planRows = @(
-        @{ scenario_id = "BASELINE"; scenario_name = "Current baseline plan"; scenario_type = "Baseline"; material_id = "MAT-100"; material_name = "Contoso Smart Sensor"; product_family = "Electronics"; plant_id = "PL-30"; plant_name = "Atlanta Fulfillment Center"; region = "East"; planning_owner = "Jordan Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 300; open_sales_order_qty = 220; baseline_demand_qty = 560; consensus_demand_qty = 680; planned_demand_qty = 680; safety_stock_days = 10; lead_time_override_days = 31; reorder_qty = 450; projected_inventory_after_plan = 140; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Medium"; working_capital_impact = 18900; supplier_delay_risk = "High" }
-        @{ scenario_id = "REV1"; scenario_name = "Planner revised replenishment"; scenario_type = "Revised"; material_id = "MAT-100"; material_name = "Contoso Smart Sensor"; product_family = "Electronics"; plant_id = "PL-30"; plant_name = "Atlanta Fulfillment Center"; region = "East"; planning_owner = "Jordan Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 300; open_sales_order_qty = 220; baseline_demand_qty = 560; consensus_demand_qty = 680; planned_demand_qty = 734; safety_stock_days = 15; lead_time_override_days = 36; reorder_qty = 620; projected_inventory_after_plan = 256; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Low"; working_capital_impact = 26040; supplier_delay_risk = "High" }
-        @{ scenario_id = "BASELINE"; scenario_name = "Current baseline plan"; scenario_type = "Baseline"; material_id = "MAT-400"; material_name = "AdventureWorks Battery Pack"; product_family = "Electronics"; plant_id = "PL-20"; plant_name = "Chicago Manufacturing Hub"; region = "Central"; planning_owner = "Casey Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 420; open_sales_order_qty = 360; baseline_demand_qty = 610; consensus_demand_qty = 790; planned_demand_qty = 790; safety_stock_days = 10; lead_time_override_days = 31; reorder_qty = 520; projected_inventory_after_plan = 220; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Medium"; working_capital_impact = 18200; supplier_delay_risk = "High" }
-        @{ scenario_id = "REV1"; scenario_name = "Planner revised replenishment"; scenario_type = "Revised"; material_id = "MAT-400"; material_name = "AdventureWorks Battery Pack"; product_family = "Electronics"; plant_id = "PL-20"; plant_name = "Chicago Manufacturing Hub"; region = "Central"; planning_owner = "Casey Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 420; open_sales_order_qty = 360; baseline_demand_qty = 610; consensus_demand_qty = 790; planned_demand_qty = 884; safety_stock_days = 16; lead_time_override_days = 38; reorder_qty = 760; projected_inventory_after_plan = 366; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Low"; working_capital_impact = 26600; supplier_delay_risk = "High" }
-        @{ scenario_id = "REV1"; scenario_name = "Planner revised replenishment"; scenario_type = "Revised"; material_id = "MAT-300"; material_name = "Northwind Pump Kit"; product_family = "Industrial"; plant_id = "PL-20"; plant_name = "Chicago Manufacturing Hub"; region = "Central"; planning_owner = "Casey Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 25; open_purchase_order_qty = 240; open_sales_order_qty = 190; baseline_demand_qty = 390; consensus_demand_qty = 470; planned_demand_qty = 517; safety_stock_days = 12; lead_time_override_days = 24; reorder_qty = 390; projected_inventory_after_plan = 138; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Medium"; working_capital_impact = 46020; supplier_delay_risk = "Medium" }
+        @{ scenario_id = "BASELINE"; scenario_name = "Current baseline plan"; scenario_type = "Baseline"; material_id = "MAT-100"; material_name = "Contoso Smart Sensor"; product_family = "Electronics"; plant_id = "PL-30"; plant_name = "Atlanta Fulfillment Center"; region = "East"; planning_owner = "Jordan Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 300; open_sales_order_qty = 220; baseline_demand_qty = 560; consensus_demand_qty = 680; planned_demand_qty = 680; safety_stock_days = 10; lead_time_override_days = 31; reorder_qty = 450; projected_inventory_after_plan = 140; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Medium"; high_risk_before_count = 1; high_risk_after_count = 0; risk_reduction_count = 1; service_level_before_pct = 0.79; service_level_after_pct = 0.90; service_level_delta_pct = 0.11; working_capital_impact = 18900; working_capital_delta = 0; supplier_delay_risk = "High"; action_priority = "P1"; planning_recommendation = "Add temporary buffer while supplier lead time stabilizes." }
+        @{ scenario_id = "REV1"; scenario_name = "Planner revised replenishment"; scenario_type = "Revised"; material_id = "MAT-100"; material_name = "Contoso Smart Sensor"; product_family = "Electronics"; plant_id = "PL-30"; plant_name = "Atlanta Fulfillment Center"; region = "East"; planning_owner = "Jordan Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 300; open_sales_order_qty = 220; baseline_demand_qty = 560; consensus_demand_qty = 680; planned_demand_qty = 734; safety_stock_days = 15; lead_time_override_days = 36; reorder_qty = 620; projected_inventory_after_plan = 256; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Low"; high_risk_before_count = 1; high_risk_after_count = 0; risk_reduction_count = 1; service_level_before_pct = 0.79; service_level_after_pct = 0.97; service_level_delta_pct = 0.18; working_capital_impact = 26040; working_capital_delta = 7140; supplier_delay_risk = "High"; action_priority = "P1"; planning_recommendation = "Increase replenishment and safety stock to protect service level." }
+        @{ scenario_id = "BASELINE"; scenario_name = "Current baseline plan"; scenario_type = "Baseline"; material_id = "MAT-400"; material_name = "AdventureWorks Battery Pack"; product_family = "Electronics"; plant_id = "PL-20"; plant_name = "Chicago Manufacturing Hub"; region = "Central"; planning_owner = "Casey Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 420; open_sales_order_qty = 360; baseline_demand_qty = 610; consensus_demand_qty = 790; planned_demand_qty = 790; safety_stock_days = 10; lead_time_override_days = 31; reorder_qty = 520; projected_inventory_after_plan = 220; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Medium"; high_risk_before_count = 1; high_risk_after_count = 0; risk_reduction_count = 1; service_level_before_pct = 0.77; service_level_after_pct = 0.91; service_level_delta_pct = 0.14; working_capital_impact = 18200; working_capital_delta = 0; supplier_delay_risk = "High"; action_priority = "P1"; planning_recommendation = "Increase reorder quantity because supplier risk is high and demand is elevated." }
+        @{ scenario_id = "REV1"; scenario_name = "Planner revised replenishment"; scenario_type = "Revised"; material_id = "MAT-400"; material_name = "AdventureWorks Battery Pack"; product_family = "Electronics"; plant_id = "PL-20"; plant_name = "Chicago Manufacturing Hub"; region = "Central"; planning_owner = "Casey Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 70; open_purchase_order_qty = 420; open_sales_order_qty = 360; baseline_demand_qty = 610; consensus_demand_qty = 790; planned_demand_qty = 884; safety_stock_days = 16; lead_time_override_days = 38; reorder_qty = 760; projected_inventory_after_plan = 366; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Low"; high_risk_before_count = 1; high_risk_after_count = 0; risk_reduction_count = 1; service_level_before_pct = 0.77; service_level_after_pct = 0.98; service_level_delta_pct = 0.21; working_capital_impact = 26600; working_capital_delta = 8400; supplier_delay_risk = "High"; action_priority = "P1"; planning_recommendation = "Protect Chicago service level with larger battery pack buffer." }
+        @{ scenario_id = "REV1"; scenario_name = "Planner revised replenishment"; scenario_type = "Revised"; material_id = "MAT-300"; material_name = "Northwind Pump Kit"; product_family = "Industrial"; plant_id = "PL-20"; plant_name = "Chicago Manufacturing Hub"; region = "Central"; planning_owner = "Casey Planner"; forecast_month = "2026-10"; forecast_month_start = "2026-10-01"; time_period_id = 202610; available_qty = 25; open_purchase_order_qty = 240; open_sales_order_qty = 190; baseline_demand_qty = 390; consensus_demand_qty = 470; planned_demand_qty = 517; safety_stock_days = 12; lead_time_override_days = 24; reorder_qty = 390; projected_inventory_after_plan = 138; stockout_risk_before_plan = "High"; stockout_risk_after_plan = "Medium"; high_risk_before_count = 1; high_risk_after_count = 0; risk_reduction_count = 1; service_level_before_pct = 0.70; service_level_after_pct = 0.89; service_level_delta_pct = 0.19; working_capital_impact = 46020; working_capital_delta = 15340; supplier_delay_risk = "Medium"; action_priority = "P2"; planning_recommendation = "Review pump kit demand uplift and confirm supplier capacity before increasing further." }
     )
     $inventoryRows = $planRows |
         Where-Object { $_.scenario_id -eq "REV1" } |
@@ -502,8 +498,17 @@ model Model
                 New-Column "projected_inventory_after_plan" "int64"
                 New-Column "stockout_risk_before_plan" "string"
                 New-Column "stockout_risk_after_plan" "string"
+                New-Column "high_risk_before_count" "int64"
+                New-Column "high_risk_after_count" "int64"
+                New-Column "risk_reduction_count" "int64"
+                New-Column "service_level_before_pct" "decimal"
+                New-Column "service_level_after_pct" "decimal"
+                New-Column "service_level_delta_pct" "decimal"
                 New-Column "working_capital_impact" "decimal"
+                New-Column "working_capital_delta" "decimal"
                 New-Column "supplier_delay_risk" "string"
+                New-Column "action_priority" "string"
+                New-Column "planning_recommendation" "string"
             )
         }
         @{
